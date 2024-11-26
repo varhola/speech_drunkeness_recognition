@@ -3,7 +3,7 @@ import evaluate
 
 from datasets import load_dataset
 
-from transformers import AutoConfig, Wav2Vec2Processor
+from transformers import AutoConfig, Wav2Vec2Processor, AutoFeatureExtractor
 
 def load_datasets():
 
@@ -25,8 +25,8 @@ def load_datasets():
 
     print("Datasets loaded")
 
-    print(train_dataset)
-    print(eval_dataset)
+    # print(train_dataset)
+    # print(eval_dataset)
 
     return (train_dataset, eval_dataset)
 
@@ -40,25 +40,29 @@ def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_
     output_column = "drunken"
 
     label_list = train_data.unique(output_column)
-    label_list.sort() 
+    label_list.sort()
     num_labels = len(label_list)
-    print(f"A classification problem with {num_labels} classes: {label_list}")
+
+    id2label_fn = train_data.features["drunken"]
 
     label2id = {label: i for i, label in enumerate(label_list)},
     id2label = {i: label for i, label in enumerate(label_list)},
 
+    print(f"A classification problem with {num_labels} classes: {label_list}")
+
     config = AutoConfig.from_pretrained(
         model_name,
         num_labels=num_labels,
-        label2id=label2id,
-        id2label=id2label,
+        label2id=label2id[0],
+        id2label=id2label[0],
         finetuning_task="wav2vec2_clf",
     )
+
     setattr(config, 'pooling_mode', pooling_mode)
 
     processor = Wav2Vec2Processor.from_pretrained(model_name,)
     target_sampling_rate = processor.feature_extractor.sampling_rate
-    # print(f"The target sampling rate: {target_sampling_rate}")
+    print(f"The target sampling rate: {target_sampling_rate}")
 
     def speech_file_to_array_fn(path):
         speech_array, sampling_rate = torchaudio.load(path)
@@ -86,12 +90,16 @@ def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_
         preprocess_function,
         batch_size=5,
         batched=True,
+        remove_columns=["name", "path", "drunken"],
     )
     eval_dataset = eval_data.map(
         preprocess_function,
         batch_size=5,
         batched=True,
+        remove_columns=["name", "path", "drunken"],
     )
+
+    print(train_dataset)
 
     metric = evaluate.load("accuracy")
 
@@ -100,4 +108,4 @@ def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_
     # print(f"Training attention_mask: {train_dataset[idx]['attention_mask']}")
     # print(f"Training labels: {train_dataset[idx]['labels']} - {train_dataset[idx]['drunken']}")
 
-    return (train_dataset, eval_dataset, metric, label2id, id2label)
+    return (train_dataset, eval_dataset, metric, label2id[0], id2label[0], id2label_fn)
