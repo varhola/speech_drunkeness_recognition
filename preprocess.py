@@ -3,7 +3,7 @@ import evaluate
 
 from datasets import load_dataset
 
-from transformers import AutoConfig, Wav2Vec2Processor, AutoFeatureExtractor
+from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
 def load_datasets():
 
@@ -25,12 +25,13 @@ def load_datasets():
 
     print("Datasets loaded")
 
-    # print(train_dataset)
-    # print(eval_dataset)
-
     return (train_dataset, eval_dataset)
 
-def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_mode="mean"):
+def id2label_fn(id):
+    labels = ["sober", "drunk"]
+    return labels[id]
+
+def preprocess_datasets():
 
     (train_data, eval_data) = load_datasets()
 
@@ -43,26 +44,31 @@ def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_
     label_list.sort()
     num_labels = len(label_list)
 
-    id2label_fn = train_data.features["drunken"]
+    label2id = {
+        "sober": 0,
+        "drunk": 1,
+    },
+    id2label = {
+        0: "sober",
+        1: "drunk",
+    }
 
-    label2id = {label: i for i, label in enumerate(label_list)},
-    id2label = {i: label for i, label in enumerate(label_list)},
-
-    print(f"A classification problem with {num_labels} classes: {label_list}")
-
-    config = AutoConfig.from_pretrained(
-        model_name,
+    model_id = "ntu-spml/distilhubert"
+    
+    model = AutoModelForAudioClassification.from_pretrained(
+        model_id,
         num_labels=num_labels,
-        label2id=label2id[0],
-        id2label=id2label[0],
-        finetuning_task="wav2vec2_clf",
+        label2id=label2id,
+        id2label=id2label,
     )
 
-    setattr(config, 'pooling_mode', pooling_mode)
+    print(f"A classification problem with {num_labels} classes")
 
-    processor = Wav2Vec2Processor.from_pretrained(model_name,)
-    target_sampling_rate = processor.feature_extractor.sampling_rate
-    print(f"The target sampling rate: {target_sampling_rate}")
+    feature_extractor = AutoFeatureExtractor.from_pretrained(
+        model_id, do_normalize=True, return_attention_mask=True
+    )
+    target_sampling_rate = feature_extractor.sampling_rate
+    print("Sampling rate:", target_sampling_rate)
 
     def speech_file_to_array_fn(path):
         speech_array, sampling_rate = torchaudio.load(path)
@@ -70,42 +76,35 @@ def preprocess_datasets(model_name="maxidl/wav2vec2-large-xlsr-german", pooling_
         speech = resampler(speech_array).squeeze().numpy()
         return speech
 
-    def label_to_id(label, label_list):
-
-        if len(label_list) > 0:
-            return label_list.index(label) if label in label_list else -1
-
-        return label
-
     def preprocess_function(examples):
         speech_list = [speech_file_to_array_fn(path) for path in examples[input_column]]
-        target_list = [label_to_id(label, label_list) for label in examples[output_column]]
+        target_list = [label for label in examples[output_column]]
 
-        result = processor(speech_list, sampling_rate=target_sampling_rate)
-        result["labels"] = list(target_list)
+        max_duration = 5.0
 
-        return result
+        inputs = feature_extractor(
+            speech_list, 
+            sampling_rate=feature_extractor.sampling_rate,
+            max_length=int(feature_extractor.sampling_rate * max_duration),
+            truncation=True,
+            return_attention_mask=True,
+        )
+
+        inputs["label"] = list(target_list)
+
+        return inputs
     
     train_dataset = train_data.map(
         preprocess_function,
-        batch_size=5,
+        batch_size=10,
         batched=True,
-        remove_columns=["name", "path", "drunken"],
+        remove_columns=["drunken", "name", "path"],
     )
     eval_dataset = eval_data.map(
         preprocess_function,
-        batch_size=5,
+        batch_size=10,
         batched=True,
-        remove_columns=["name", "path", "drunken"],
+        remove_columns=["drunken", "name", "path"],
     )
 
-    print(train_dataset)
-
-    metric = evaluate.load("accuracy")
-
-    # idx = 0
-    # print(f"Training input_values: {train_dataset[idx]['input_values']}")
-    # print(f"Training attention_mask: {train_dataset[idx]['attention_mask']}")
-    # print(f"Training labels: {train_dataset[idx]['labels']} - {train_dataset[idx]['drunken']}")
-
-    return (train_dataset, eval_dataset, metric, label2id[0], id2label[0], id2label_fn)
+    return (train_dataset, eval_dataset, model, feature_extractor)

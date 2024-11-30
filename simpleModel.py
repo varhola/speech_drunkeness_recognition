@@ -1,24 +1,22 @@
 import numpy as np
+import evaluate
 
-from transformers import AutoModelForAudioClassification, TrainingArguments, Trainer, AutoFeatureExtractor
+from transformers import TrainingArguments, Trainer
 
-def getSimpleModel(train_dataset, eval_dataset, metric, label2id, id2label, batch_size=8, model_checkpoint="facebook/wav2vec2-base",gradient_accumulation_steps = 1, num_train_epochs = 10):
+def getSimpleModel(train_dataset, eval_dataset, model, feature_extractor):
 
-    feature_extractor = AutoFeatureExtractor.from_pretrained(model_checkpoint)
+    model_id = "ntu-spml/distilhubert"
 
-    num_labels = len(id2label)
-    model = AutoModelForAudioClassification.from_pretrained(
-        model_checkpoint, 
-        num_labels=num_labels,
-        label2id=label2id,
-        id2label=id2label,
-    )
+    model_name = model_id.split("/")[-1]
+    batch_size = 8
+    gradient_accumulation_steps = 1
+    num_train_epochs = 10
 
-    model_name = model_checkpoint.split("/")[-1]
+    model_name = model_id.split("/")[-1]
 
-    args = TrainingArguments(
+    training_args = TrainingArguments(
         f"{model_name}-finetuned-gtzan",
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=5e-5,
         per_device_train_batch_size=batch_size,
@@ -33,6 +31,8 @@ def getSimpleModel(train_dataset, eval_dataset, metric, label2id, id2label, batc
         push_to_hub=True,
     )
 
+    metric = evaluate.load("accuracy")
+
     def compute_metrics(eval_pred):
         """Computes accuracy on a batch of predictions"""
         predictions = np.argmax(eval_pred.predictions, axis=1)
@@ -40,11 +40,11 @@ def getSimpleModel(train_dataset, eval_dataset, metric, label2id, id2label, batc
 
     trainer = Trainer(
         model,
-        args,
+        training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=feature_extractor,
-        compute_metrics=compute_metrics
+        compute_metrics=compute_metrics,
     )
 
     return trainer

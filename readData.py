@@ -34,9 +34,9 @@ def load_data(debug = False):
                 file = os.path.dirname(file) + "/" + json_data["annotates"]
                 bak = find_bac(json_data["levels"][0]["items"][0]["labels"])
 
-                status = 'sober'
+                status = 0
                 if bak > DRUNK_THRESHOLD:
-                    status = 'drunk'
+                    status = 1
 
                 data.append([name, file, status])
 
