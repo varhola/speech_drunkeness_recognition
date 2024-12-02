@@ -8,10 +8,14 @@ if __name__ == "__main__":
 
     login()
 
-    create_database()
+    print("Starting a new run")
+
+    # create_database()
 
     (train_dataset, eval_dataset, model, feature_extractor) = preprocess_datasets()
 
     trainer = getSimpleModel(train_dataset, eval_dataset, model, feature_extractor)
     trainer.train()
     trainer.evaluate()
+
+    print("Run finished")

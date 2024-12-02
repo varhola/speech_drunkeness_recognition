@@ -3,16 +3,12 @@ import evaluate
 
 from transformers import TrainingArguments, Trainer
 
-def getSimpleModel(train_dataset, eval_dataset, model, feature_extractor):
-
-    model_id = "ntu-spml/distilhubert"
+def getSimpleModel(train_dataset, eval_dataset, model, feature_extractor, model_id = "ntu-spml/distilhubert"):
 
     model_name = model_id.split("/")[-1]
     batch_size = 8
     gradient_accumulation_steps = 1
     num_train_epochs = 10
-
-    model_name = model_id.split("/")[-1]
 
     training_args = TrainingArguments(
         f"{model_name}-finetuned-gtzan",

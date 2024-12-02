@@ -20,8 +20,17 @@ def load_datasets():
     # eval_dataset = dataset["validation"]
 
     # Partial dataset
-    train_dataset = load_dataset("csv", data_files=data_files, delimiter="\t", split="train[:1%]")
-    eval_dataset = load_dataset("csv", data_files=data_files, delimiter="\t", split="validation[:1%]")
+    train_dataset = load_dataset("csv", data_files=data_files, delimiter="\t", split="train[:10%]")
+    eval_dataset = load_dataset("csv", data_files=data_files, delimiter="\t", split="validation[:10%]")
+
+    print("Train dataset")
+    print(train_dataset)
+    print("Drunken:", train_dataset["drunken"].count(1))
+    print("Sober:", train_dataset["drunken"].count(0))
+    print("Test dataset")
+    print(eval_dataset)
+    print("Drunken:", eval_dataset["drunken"].count(1))
+    print("Sober:", eval_dataset["drunken"].count(0))
 
     print("Datasets loaded")
 
@@ -31,7 +40,7 @@ def id2label_fn(id):
     labels = ["sober", "drunk"]
     return labels[id]
 
-def preprocess_datasets():
+def preprocess_datasets(model_id = "ntu-spml/distilhubert"):
 
     (train_data, eval_data) = load_datasets()
 
@@ -52,8 +61,6 @@ def preprocess_datasets():
         0: "sober",
         1: "drunk",
     }
-
-    model_id = "ntu-spml/distilhubert"
     
     model = AutoModelForAudioClassification.from_pretrained(
         model_id,
